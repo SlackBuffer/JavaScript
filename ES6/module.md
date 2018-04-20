@@ -151,7 +151,7 @@
     // approach 1
 
     export default function (a, b) {
-        return a + b;n
+        return a + b;
     }
 
     // approach 2
