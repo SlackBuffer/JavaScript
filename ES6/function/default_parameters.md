@@ -1,3 +1,23 @@
+- ES5 实现
+
+    ```javascript
+    function makeRequest(url, timeout, callback) {
+        timeout = timeout || 2000;
+        callback = callback || function() {};
+    }
+    ```
+
+    - 缺陷: 传入的 `timeout` 为 0 时，逻辑出错
+
+        ```javascript
+        function makeRequest(url, timeout, callback) {
+            timeout = (typeof timeout !== "undefined") ? timeout : 2000;
+            callback = (typeof callback !== "undefined") ? callback : function() {};
+        }
+        ```
+
+        - 改进版
+
 - 参数默认值
 
     ```javascript
