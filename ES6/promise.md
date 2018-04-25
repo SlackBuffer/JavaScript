@@ -107,7 +107,7 @@
 ## 创建 unsettled promise
 - `Promise()` 构造器
     - 接受单一参数：一个叫作 ***executor*** 的函数，用来初始化 promise
-    - executor 函数被传入了两个函数作为参数（不是开发者传的，用 `arr.map(function(item, index, arr) {});` 类比）
+    - executor 函数被传入了两个函数作为参数（类比 `arr.map(function(item, index, arr) {});`，两个函数由 JS 自动传入，函数参数在 promise 被处理后才确定）
         1. `resolve()`
             - executor 函数成功执行后执行
             - 表示 promise 待 resolved
@@ -241,3 +241,167 @@
 
     });
     ```
+
+    - 每个 executor 函数都有隐式的 `try-catch`，抛错会被捕捉
+    - 抛错只有在有 rejection handler 存在时才会被报告
+- promise 状态是 rejected 而没有相应的 rejection handler 的时候，结果是 silent failure
+    - 无论 promise 是否已经 resolved，调用 `then()` 或 `catch()` 都会得到正确执行，使得很难准确知道 promise 将在何时得到处理
+## Node.js rejection 处理
+- Node.js 的 `process` 对象上有 2 个与 promise rejection 处理的事件
+    1. `unhandledRejection`：一轮 event loop 中，一个 promise 被 reject 又没有对应的处理器时被触发
+
+        ```js
+        let rejected;
+        process.on('unhandleRejection', function (reason, promise) {
+            console.log(reason.message);            // "error"
+
+            console.log(rejected === promise);      // true
+
+        });
+        rejected = Promise.reject(new Error('error'));
+        ```
+
+    2. `rejectionHandled` 
+- A simple unhandled rejection tracker.
+## 浏览器 rejection 处理
+- 与 Node.js 上的事件，存在在 `window` 对象上
+- 事件对象的属性
+    - `type`：事件类型
+    - `promise`
+    - `reason`：promise 的 rejection 值
+## 串联 promise
+- `then()` 和 `catch()` 返回的是 promise
+- 串联的 promise 只有前面一个 resolve 后，后接的 promise 才会被处理
+- 捕捉前一个 promise 的处理器中可能抛出的错误
+
+    ```js
+    let p1 = new Promise(function (resolve, reject) {
+        resolve(42);
+    });
+    p1.then(function (value) {
+        throw new Error('boom');
+    }).catch(function (error) {
+        console.log(err.message);   // error
+
+    });
+    ```    
+
+- 总是在 promise chain 的末尾放一个 rejection handler
+## promise chain 的返回值
+- 为 fulfilled handler 指定返回值后可以将该值沿着 promise chain 传递下去
+
+    ```js
+    let p1 = new Promise(function (resolve, reject) {
+        resolve(44);
+    });
+    p1.then(function (value) {
+        console.log(value);         /* 44 */
+        return value + 1;
+    }).then(function (value) {
+        console.log(value);         /* 45 */
+    });
+    ```
+
+- 一个 promise 失败，整条 promise chain 还可以恢复
+
+    ```js
+    let p1 = new Promise(function (resolve, reject) {
+        reject(44);
+    });
+    p1.catch(function (value) {
+        console.log(value);
+        return value + 1;       /* 44 */
+    }).then(function (value) {
+        console.log(value);     /* 45 */
+    });
+    ```    
+
+    - rejection handler 的返回值仍可以被下一个 fulfillment handler 里获取    
+## promise chain 返回 promise
+- 若 promise 的返回值不是基础类型而是 promise 对象，要视情况处理
+
+    ```js
+    let p1 = new Promise(function (resolve, reject) {
+        resolve(42);
+    });
+    
+    let p2 = new Promise(function (resolve, reject) {
+        reject(43);
+    });
+    p1.then(function (value) {
+        console.log(value);
+        return p2;
+    }).then(function (value) {
+        console.log(value);     /* 未被调用，第二个 then() 的 promise 的状态是 rejected（p2） */
+    });
+    ```
+
+- 前一个 promise 被处理后再触发下一个 promise
+
+    ```js
+    let p1 = new Promise(function (resolve, reject) {
+        resolve(42);
+    });
+    p1.then(function (value) {
+        console.log(value);
+        let p2 = new Promise(function (resolve, reject) {
+            resolve(43);
+        });
+        return p2;
+    }).then(function (value) {
+        console.log(value);
+    });
+    ```
+
+    - p2 的状态变为 fulfilled 后第二个 fulfillment handler 才会执行
+## 回应多个 promise
+- `Promise.all()`
+    - 接受单一的参数，promise 的 iterable（如数组）
+    - 当参数里所有的 promise 都 resolved 后，返回一个 resolved promise
+    - 一旦有一个 promise 是 rejected，就退出不在执行（短路）
+- `Promise.race()`
+    - 有一个 promise 状态变为 settled，返回的 promise 就 settle
+    - 返回的 promise 的状态由第一个 settled promise 决定
+## 从 promise 继承
+## Asynchronous task running
+- task runner
+
+    ```js
+    let f = require('fs');
+    function run(taskDef) {
+        // create the iterator
+
+        let task = taskDef();
+        /* start the task */
+        let result = task.next();
+        (function step() {
+            if (!result.done) {
+                let promise = Promise.resolve(result.value);
+                promise.then(function (value) {
+                    result = task.next(value);
+                    step();
+                }).catch(function (error) {
+                    result = task.throw(error);
+                    step();
+                });
+            }
+        }());
+    }
+
+    function readFile(filename) {
+        return new Promise(function (resolve, reject) {
+            fs.readFile(filename, function (err, contents) {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(contents);
+                }
+            });
+        });
+    }
+    run(function*() {
+        let contents = yield readFile('config.json');
+        doSomethingWith(contents);
+        console.log('done');
+    })
+    ```    
