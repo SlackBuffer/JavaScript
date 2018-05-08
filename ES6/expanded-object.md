@@ -22,7 +22,7 @@
     }
     ```
 
-- 对象字面量方法的简练写法
+- 对象字面量方法的简练写法（concise methods）
 
     ```js
     // es5
@@ -82,5 +82,33 @@
     console.log(descriptor.get);        // undefined
     ```
 
-    - `receiver.name` exists as a data property with a value of "file.js" because `supplier.name` returned "file.js" when `Object.assign()` was called.
+    - `receiver.name` exists as a data property with a value of "file.js" because `supplier.name` returned "file.js" when `Object.assign()` was called
+- `Object.is()`
 
+    ```js
+    +0 === -0;              // true
+    Object.is(+0, -0);      // false
+    NaN === NaN;            // false
+    Object.is(NaN, NaN);    // false
+    ```
+
+- ES6 允许对象的属性重名，重名属性值取最后被赋予的那个
+- ES5 未定义对象属性的枚举顺序，由各个 js 引擎厂家自行实现
+- ES6 严格规定了对象属性的枚举顺序
+    1. 数字键名，从小到大枚举
+    2. 字符串键名，按加入到对象的顺序枚举
+    3. symbol 键名，按加入到对象的顺序枚举
+    - `Object.getOwnPropertyNames()` 和 `Reflect.ownKeys` 遵循规定
+    - `for-in` 仍按照未指定的顺序枚举，因为各 js 引擎的实现方式不同
+    - `Object.keys()` 和 `JSON.stringify()` 使用的也是未指定的枚举顺序
+- `Object.setProptotypeOf()` 方法可以修改任意对象的 prototype
+    - 第一个参数是要改 prototype 的一个对象
+    - 第二个参数是变成第一个对象的 prototype 的一个对象
+    - > `Object.getProptotypeOf()` 得到一个对象的 prototype
+- 可以通过 `super` 去访问 prototype 上的功能
+    - `super` 引用的指向不是动态的，总是指向正确的对象
+    - super 只能在 concise methods 里使用
+    - ES5 用 `Object.getPrototypeOf(this)` 去实现，但多重继承时会有问题
+- 定义在对象里的方法有一个内部属性 `[[HomeObect]]`，值是拥有该方法的对象
+    - 一个函数创建时若不是一个对象的方法，则没有 `[[HomeObject]]` 属性
+    - `super` 第一步会去调用 `Object.getPrototypeOf([[HomeObject]])` 获得 prototype 的引用；在 prototype 上查找指定的方法；`this` 绑定后调用该方法
